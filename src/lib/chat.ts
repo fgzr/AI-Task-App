@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { getChatCompletion } from "./openai";
+import { getGeminiCompletion } from "./gemini";
 
 type SubTask = {
   id?: string;
@@ -36,7 +37,11 @@ type ChatMessage = {
 // Store conversation history - limited to fewer messages to reduce token usage
 let conversationHistory: ChatMessage[] = [];
 
-export async function processUserMessage(message: string, userId: string) {
+export async function processUserMessage(
+  message: string,
+  userId: string,
+  modelType: "openai" | "gemini" = "gemini",
+) {
   // Get existing tasks and projects for context - limit to recent/relevant items only
   const { data: existingTasks } = await supabase
     .from("tasks")
@@ -152,7 +157,26 @@ export async function processUserMessage(message: string, userId: string) {
     ...conversationHistory,
   ];
 
-  const response = await getChatCompletion(messages);
+  // Use the selected model with fallback
+  let response;
+  try {
+    if (modelType === "openai") {
+      response = await getChatCompletion(messages);
+    } else {
+      try {
+        response = await getGeminiCompletion(messages);
+      } catch (error) {
+        console.warn(
+          "Gemini API error, falling back to OpenAI:",
+          error.message,
+        );
+        response = await getChatCompletion(messages);
+      }
+    }
+  } catch (error) {
+    console.error("AI API error:", error);
+    throw error;
+  }
   if (!response?.content) throw new Error("No response from AI");
 
   // Add AI response to conversation history
@@ -513,6 +537,32 @@ async function createTask(task: Task, userId: string) {
   const priority = task.priority || "medium";
   const timeEstimate = task.timeEstimate || estimateTaskEffort(task);
 
+  // Format the due date properly
+  let dueDate = null;
+  if (task.dueDate) {
+    if (typeof task.dueDate === "string") {
+      // Handle special date strings
+      if (task.dueDate.toLowerCase() === "today") {
+        dueDate = new Date().toISOString().split("T")[0];
+      } else if (task.dueDate.toLowerCase() === "tomorrow") {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        dueDate = tomorrow.toISOString().split("T")[0];
+      } else {
+        // Try to parse the date string
+        try {
+          dueDate = new Date(task.dueDate).toISOString();
+        } catch (e) {
+          console.error(`Invalid date format: ${task.dueDate}`, e);
+          // Default to null if parsing fails
+          dueDate = null;
+        }
+      }
+    } else if (task.dueDate instanceof Date) {
+      dueDate = task.dueDate.toISOString();
+    }
+  }
+
   const { data, error } = await supabase
     .from("tasks")
     .insert([
@@ -521,7 +571,7 @@ async function createTask(task: Task, userId: string) {
         description: task.description,
         priority: priority,
         project_id: task.projectId,
-        due_date: task.dueDate ? new Date(task.dueDate).toISOString() : null,
+        due_date: dueDate,
         time_estimate: timeEstimate,
         user_id: userId,
         completed: task.completed || false,

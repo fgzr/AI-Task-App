@@ -12,8 +12,11 @@ interface ChatPaneProps {
     message: string;
     isAi: boolean;
     timestamp: string;
+    isTyping?: boolean;
   }>;
   onSendMessage?: (message: string) => void;
+  modelType?: "openai" | "gemini";
+  onModelChange?: (model: "openai" | "gemini") => void;
 }
 
 const ChatPane = ({
@@ -32,6 +35,8 @@ const ChatPane = ({
     },
   ],
   onSendMessage = () => {},
+  modelType = "gemini",
+  onModelChange = () => {},
 }: ChatPaneProps) => {
   const [inputValue, setInputValue] = React.useState("");
 
@@ -62,32 +67,53 @@ const ChatPane = ({
         </div>
       </ScrollArea>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t mt-auto">
-        <div className="flex gap-2">
-          <textarea
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-            placeholder="Type your message..."
-            className="flex-1 resize-none overflow-hidden min-h-[40px] max-h-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            style={{ height: "auto" }}
-            rows={1}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = `${target.scrollHeight}px`;
-            }}
-          />
-          <Button type="submit" size="icon">
-            <Send className="h-4 w-4" />
-          </Button>
+      <div className="p-4 border-t mt-auto">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Model:</span>
+            <div className="flex bg-muted rounded-md p-0.5">
+              <button
+                className={`text-xs px-2 py-1 rounded ${modelType === "gemini" ? "bg-background shadow-sm" : ""}`}
+                onClick={() => onModelChange("gemini")}
+              >
+                Gemini 2.0 Flash
+              </button>
+              <button
+                className={`text-xs px-2 py-1 rounded ${modelType === "openai" ? "bg-background shadow-sm" : ""}`}
+                onClick={() => onModelChange("openai")}
+              >
+                GPT-3.5 Turbo
+              </button>
+            </div>
+          </div>
         </div>
-      </form>
+        <form onSubmit={handleSubmit}>
+          <div className="flex gap-2">
+            <textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+              placeholder="Type your message..."
+              className="flex-1 resize-none overflow-hidden min-h-[40px] max-h-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              style={{ height: "auto" }}
+              rows={1}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = "auto";
+                target.style.height = `${target.scrollHeight}px`;
+              }}
+            />
+            <Button type="submit" size="icon">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+      </div>
     </Card>
   );
 };

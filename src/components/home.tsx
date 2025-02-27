@@ -19,6 +19,9 @@ const Home = () => {
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
+  const [modelType, setModelType] = React.useState<"openai" | "gemini">(
+    "gemini",
+  );
   const [tasks, setTasks] = React.useState([]);
   const { user } = useAuth();
 
@@ -152,7 +155,7 @@ const Home = () => {
     ]);
 
     try {
-      const response = await processUserMessage(message, user.id);
+      const response = await processUserMessage(message, user.id, modelType);
 
       // Remove typing indicator and add actual response
       if (response.message) {
@@ -200,19 +203,40 @@ const Home = () => {
       loadTasks();
     } catch (error) {
       console.error("Error processing message:", error);
-      // Remove typing indicator and add error message
-      setMessages((prev) =>
-        prev
-          .filter((msg) => msg.id !== typingIndicatorId)
-          .concat({
-            id: String(messages.length + 2),
-            message:
-              "Sorry, I encountered an error processing your request: " +
-              (error.message || error),
-            isAi: true,
-            timestamp: new Date().toLocaleTimeString(),
-          }),
-      );
+
+      // If using Gemini and it fails, try to switch to OpenAI automatically
+      if (
+        modelType === "gemini" &&
+        error.message &&
+        error.message.includes("Gemini API error")
+      ) {
+        setModelType("openai");
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== typingIndicatorId)
+            .concat({
+              id: String(messages.length + 2),
+              message:
+                "Gemini service is currently unavailable. I've switched to GPT-3.5 Turbo for you. Please try your message again.",
+              isAi: true,
+              timestamp: new Date().toLocaleTimeString(),
+            }),
+        );
+      } else {
+        // Regular error handling
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== typingIndicatorId)
+            .concat({
+              id: String(messages.length + 2),
+              message:
+                "Sorry, I encountered an error processing your request: " +
+                (error.message || error),
+              isAi: true,
+              timestamp: new Date().toLocaleTimeString(),
+            }),
+        );
+      }
     }
   };
 
@@ -258,7 +282,12 @@ const Home = () => {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[600px] border-r border-border/40 overflow-hidden">
-          <ChatPane messages={messages} onSendMessage={handleSendMessage} />
+          <ChatPane
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            modelType={modelType}
+            onModelChange={setModelType}
+          />
         </div>
         <div className="flex-1 overflow-hidden">
           <TaskPane
