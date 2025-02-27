@@ -1,8 +1,16 @@
 import React from "react";
+import { useAuth } from "@/contexts/AuthContext.jsx";
+import { supabase } from "@/lib/supabase";
+import { processUserMessage } from "@/lib/chat";
 import ChatPane from "./ChatPane";
 import TaskPane from "./TaskPane";
+import Navbar from "./Navbar";
+
+import { Button } from "./ui/button";
 
 const Home = () => {
+  const [projects, setProjects] = React.useState([]);
+
   const [messages, setMessages] = React.useState([
     {
       id: "1",
@@ -11,158 +19,117 @@ const Home = () => {
       timestamp: new Date().toLocaleTimeString(),
     },
   ]);
+  const [tasks, setTasks] = React.useState([]);
+  const { user } = useAuth();
 
-  const [tasks, setTasks] = React.useState([
-    // Starred tasks
-    {
-      id: "1",
-      title: "Complete project proposal",
-      completed: false,
-      priority: "high",
-      dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24),
-      isStarred: true,
-      timeEstimate: 2,
-      subtasks: [
-        { id: "1-1", title: "Research market trends", completed: true },
-        { id: "1-2", title: "Draft executive summary", completed: false },
-      ],
-    },
-    {
-      id: "2",
-      title: "Strategic planning meeting",
-      completed: false,
-      priority: "high",
-      dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 5),
-      isStarred: true,
-      timeEstimate: 1.5,
-      subtasks: [],
-    },
+  const loadTasks = React.useCallback(async () => {
+    if (!user) return;
 
-    // Due today
-    {
-      id: "3",
-      title: "Submit quarterly report",
-      completed: false,
-      priority: "high",
-      dueDate: new Date(),
-      isStarred: false,
-      timeEstimate: 3,
-      subtasks: [],
-    },
-    {
-      id: "4",
-      title: "Client presentation review",
-      completed: false,
-      priority: "medium",
-      dueDate: new Date(),
-      isStarred: false,
-      timeEstimate: 1,
-      subtasks: [],
-    },
+    try {
+      // Fetch projects
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id);
 
-    // Due tomorrow
-    {
-      id: "5",
-      title: "Team sync meeting",
-      completed: false,
-      priority: "medium",
-      dueDate: new Date(Date.now() + 86400000),
-      isStarred: false,
-      timeEstimate: 1,
-      subtasks: [],
-    },
+      if (!projectsError && projectsData) {
+        setProjects(projectsData);
+      }
 
-    // Due this week
-    {
-      id: "6",
-      title: "Code review for feature X",
-      completed: false,
-      priority: "medium",
-      dueDate: new Date(Date.now() + 86400000 * 4),
-      isStarred: false,
-      timeEstimate: 2,
-      subtasks: [],
-    },
-    {
-      id: "7",
-      title: "Update documentation",
-      completed: false,
-      priority: "low",
-      dueDate: new Date(Date.now() + 86400000 * 6),
-      isStarred: false,
-      timeEstimate: 3,
-      subtasks: [],
-    },
+      // Fetch tasks with their subtasks
+      const { data: tasksData, error: tasksError } = await supabase
+        .from("tasks")
+        .select(`*, subtasks (*)`)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-    // Due next week
-    {
-      id: "8",
-      title: "Sprint planning",
-      completed: false,
-      priority: "high",
-      dueDate: new Date(Date.now() + 86400000 * 8),
-      isStarred: false,
-      timeEstimate: 2,
-      subtasks: [],
-    },
-    {
-      id: "9",
-      title: "Quarterly goals review",
-      completed: false,
-      priority: "medium",
-      dueDate: new Date(Date.now() + 86400000 * 10),
-      isStarred: false,
-      timeEstimate: 1.5,
-      subtasks: [],
-    },
+      if (tasksError) throw tasksError;
 
-    // Future tasks
-    {
-      id: "10",
-      title: "Annual strategy meeting",
-      completed: false,
-      priority: "high",
-      dueDate: new Date(Date.now() + 86400000 * 20),
-      isStarred: false,
-      timeEstimate: 4,
-      subtasks: [],
-    },
+      if (tasksData) {
+        const transformedTasks = tasksData.map((task) => ({
+          id: task.id,
+          title: task.title,
+          completed: task.completed || false,
+          completedAt: task.completed_at
+            ? new Date(task.completed_at).getTime()
+            : undefined,
+          priority: task.priority || "medium",
+          dueDate: task.due_date ? new Date(task.due_date) : undefined,
+          isStarred: task.is_starred || false,
+          projectId: task.project_id,
+          timeEstimate: task.time_estimate,
+          subtasks:
+            task.subtasks?.map((subtask) => ({
+              id: subtask.id,
+              title: subtask.title,
+              completed: subtask.completed || false,
+            })) || [],
+        }));
 
-    // No due date
-    {
-      id: "11",
-      title: "Research new technologies",
-      completed: false,
-      priority: "low",
-      isStarred: false,
-      timeEstimate: 2,
-      subtasks: [],
-    },
+        setTasks(transformedTasks);
+      }
+    } catch (error) {
+      console.error("Error loading tasks:", error);
+    }
+  }, [user]);
 
-    // Completed tasks
-    {
-      id: "12",
-      title: "Setup development environment",
-      completed: true,
-      completedAt: Date.now() - 1000 * 60 * 30,
-      priority: "medium",
-      isStarred: false,
-      timeEstimate: 1,
-      subtasks: [],
-    },
-    {
-      id: "13",
-      title: "Initial project setup",
-      completed: true,
-      completedAt: Date.now() - 1000 * 60 * 60 * 2,
-      priority: "high",
-      isStarred: false,
-      timeEstimate: 2,
-      subtasks: [],
-    },
-  ]);
+  React.useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
-  const handleSendMessage = (message: string) => {
+  // Set up realtime subscription
+  React.useEffect(() => {
+    if (!user) return;
+
+    const tasksSubscription = supabase
+      .channel("tasks-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks" },
+        () => {
+          loadTasks();
+        },
+      )
+      .subscribe();
+
+    const subtasksSubscription = supabase
+      .channel("subtasks-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "subtasks" },
+        () => {
+          loadTasks();
+        },
+      )
+      .subscribe();
+
+    const projectsSubscription = supabase
+      .channel("projects-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "projects" },
+        () => {
+          loadTasks();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      tasksSubscription.unsubscribe();
+      subtasksSubscription.unsubscribe();
+      projectsSubscription.unsubscribe();
+    };
+  }, [user, loadTasks]);
+
+  const handleSendMessage = async (message: string) => {
+    // Limit conversation history to prevent token overflow
+    if (messages.length > 10) {
+      // Keep only the first welcome message and the 9 most recent messages
+      const welcomeMessage = messages[0];
+      const recentMessages = messages.slice(-9);
+      setMessages([welcomeMessage, ...recentMessages]);
+    }
+
     const newMessage = {
       id: String(messages.length + 1),
       message,
@@ -171,47 +138,104 @@ const Home = () => {
     };
     setMessages([...messages, newMessage]);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: String(messages.length + 2),
-        message: "I'll help you with that task!",
+    // Show typing indicator
+    const typingIndicatorId = String(messages.length + 2);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: typingIndicatorId,
+        message: "Thinking...",
         isAi: true,
         timestamp: new Date().toLocaleTimeString(),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 1000);
+        isTyping: true,
+      },
+    ]);
+
+    try {
+      const response = await processUserMessage(message, user.id);
+
+      // Remove typing indicator and add actual response
+      if (response.message) {
+        if (response.confirmation) {
+          // Handle deletion confirmation
+          setMessages((prev) =>
+            prev
+              .filter((msg) => msg.id !== typingIndicatorId)
+              .concat({
+                id: String(messages.length + 2),
+                message: response.message,
+                isAi: true,
+                timestamp: new Date().toLocaleTimeString(),
+                confirmation: response.confirmation,
+              }),
+          );
+        } else {
+          // Regular response
+          setMessages((prev) =>
+            prev
+              .filter((msg) => msg.id !== typingIndicatorId)
+              .concat({
+                id: String(messages.length + 2),
+                message: response.message || "Got it! I've updated your tasks.",
+                isAi: true,
+                timestamp: new Date().toLocaleTimeString(),
+              }),
+          );
+        }
+      } else {
+        // If no message was returned, add a default one
+        setMessages((prev) =>
+          prev
+            .filter((msg) => msg.id !== typingIndicatorId)
+            .concat({
+              id: String(messages.length + 2),
+              message: "Got it! I've updated your tasks.",
+              isAi: true,
+              timestamp: new Date().toLocaleTimeString(),
+            }),
+        );
+      }
+
+      // Refresh tasks after AI actions
+      loadTasks();
+    } catch (error) {
+      console.error("Error processing message:", error);
+      // Remove typing indicator and add error message
+      setMessages((prev) =>
+        prev
+          .filter((msg) => msg.id !== typingIndicatorId)
+          .concat({
+            id: String(messages.length + 2),
+            message:
+              "Sorry, I encountered an error processing your request: " +
+              (error.message || error),
+            isAi: true,
+            timestamp: new Date().toLocaleTimeString(),
+          }),
+      );
+    }
   };
 
-  const handleTaskToggle = (taskId: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              completed: !task.completed,
-              completedAt: !task.completed ? Date.now() : undefined,
-            }
-          : task,
-      ),
-    );
-  };
+  const handleTaskToggle = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || !user) return;
 
-  const getDateForSection = (section: string): Date | undefined => {
-    const now = new Date();
-    switch (section) {
-      case "Due Today & Overdue":
-        return now;
-      case "Due Tomorrow":
-        return new Date(now.getTime() + 86400000);
-      case "Due This Week":
-        return new Date(now.getTime() + 86400000 * 3); // Middle of the week
-      case "Due Next Week":
-        return new Date(now.getTime() + 86400000 * 10); // Middle of next week
-      case "Future Tasks":
-        return new Date(now.getTime() + 86400000 * 15); // Two weeks from now
-      default:
-        return undefined;
+    const newCompletedState = !task.completed;
+    const completedAt = newCompletedState ? new Date().toISOString() : null;
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          completed: newCompletedState,
+          completed_at: completedAt,
+        })
+        .eq("id", taskId)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error toggling task:", error);
     }
   };
 
@@ -223,41 +247,37 @@ const Home = () => {
     setTasks((prevTasks) => {
       const newTasks = [...prevTasks];
       const [movedTask] = newTasks.splice(sourceIndex, 1);
-
-      // Create a new task object to ensure state update
-      const updatedTask = {
-        ...movedTask,
-        dueDate:
-          targetSection && !movedTask.isStarred && !movedTask.completed
-            ? getDateForSection(targetSection)
-            : movedTask.dueDate,
-      };
-
-      // Insert the task at the target position
-      newTasks.splice(targetIndex, 0, updatedTask);
+      newTasks.splice(targetIndex, 0, movedTask);
       return newTasks;
     });
   };
 
   return (
-    <div className="flex h-screen bg-background border-0">
-      <div className="w-[600px]">
-        <ChatPane messages={messages} onSendMessage={handleSendMessage} />
-      </div>
-      <div className="flex-1">
-        <TaskPane
-          tasks={tasks}
-          onTaskToggle={handleTaskToggle}
-          onTaskReorder={handleTaskReorder}
-          onTasksUpdate={setTasks}
-          onToggleStar={(id) => {
-            setTasks((prev) =>
-              prev.map((task) =>
-                task.id === id ? { ...task, isStarred: !task.isStarred } : task,
-              ),
-            );
-          }}
-        />
+    <div className="flex flex-col h-screen bg-background border-0 overflow-hidden">
+      <Navbar />
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-[600px] border-r border-border/40 overflow-hidden">
+          <ChatPane messages={messages} onSendMessage={handleSendMessage} />
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <TaskPane
+            tasks={tasks}
+            projects={projects}
+            onTaskToggle={handleTaskToggle}
+            onTaskReorder={handleTaskReorder}
+            onTasksUpdate={setTasks}
+            onToggleStar={(id) => {
+              setTasks((prev) =>
+                prev.map((task) =>
+                  task.id === id
+                    ? { ...task, isStarred: !task.isStarred }
+                    : task,
+                ),
+              );
+            }}
+          />
+        </div>
       </div>
     </div>
   );

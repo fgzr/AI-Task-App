@@ -29,3 +29,4 @@ dist-ssr
 **/tempobook/storyboards/
 
 core
+.env

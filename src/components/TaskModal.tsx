@@ -23,6 +23,7 @@ import {
 } from "./ui/select";
 import { Switch } from "./ui/switch";
 import { Textarea } from "./ui/textarea";
+import { ProjectSelect } from "./ProjectSelect";
 
 type Priority = "low" | "medium" | "high";
 type RecurringFrequency = "daily" | "weekly" | "biweekly" | "monthly";
@@ -37,7 +38,8 @@ interface TaskData {
   id: string;
   title: string;
   description?: string;
-  priority: Priority;
+  priority?: Priority;
+  projectId?: string;
   dueDate?: Date;
   isRecurring: boolean;
   recurringFrequency?: RecurringFrequency;
@@ -51,13 +53,15 @@ interface TaskModalProps {
   onOpenChange: (open: boolean) => void;
   task?: TaskData;
   onSave: (task: TaskData) => void;
+  onDelete?: (taskId: string) => void;
+  projects?: Array<{ id: string; name: string; color: string }>;
 }
 
 const defaultTask: TaskData = {
   id: "",
   title: "",
   description: "",
-  priority: "medium",
+  priority: undefined,
   isRecurring: false,
   timeEstimate: 0,
   subtasks: [],
@@ -68,6 +72,8 @@ export function TaskModal({
   onOpenChange,
   task = defaultTask,
   onSave,
+  onDelete,
+  projects = [],
 }: TaskModalProps) {
   const [taskData, setTaskData] = React.useState<TaskData>(task);
 
@@ -88,8 +94,9 @@ export function TaskModal({
               id="title"
               value={taskData.title}
               onChange={(e) =>
-                setTaskData((prev) => ({ ...prev, title: e.target.value }))
+                setTaskData({ ...taskData, title: e.target.value })
               }
+              placeholder="Task title"
             />
           </div>
 
@@ -99,20 +106,18 @@ export function TaskModal({
               id="description"
               value={taskData.description}
               onChange={(e) =>
-                setTaskData((prev) => ({
-                  ...prev,
-                  description: e.target.value,
-                }))
+                setTaskData({ ...taskData, description: e.target.value })
               }
+              placeholder="Task description"
             />
           </div>
 
           <div className="grid gap-2">
             <Label>Priority</Label>
             <Select
-              value={taskData.priority}
-              onValueChange={(value: Priority) =>
-                setTaskData((prev) => ({ ...prev, priority: value }))
+              value={taskData.priority || "medium"}
+              onValueChange={(value) =>
+                setTaskData({ ...taskData, priority: value as Priority })
               }
             >
               <SelectTrigger>
@@ -127,12 +132,23 @@ export function TaskModal({
           </div>
 
           <div className="grid gap-2">
+            <Label>Project</Label>
+            <ProjectSelect
+              projects={projects}
+              selectedProjectId={taskData.projectId}
+              onProjectSelect={(projectId) =>
+                setTaskData({ ...taskData, projectId })
+              }
+            />
+          </div>
+
+          <div className="grid gap-2">
             <Label>Due Date</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full justify-start text-left font-normal"
+                  className="justify-start text-left font-normal"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {taskData.dueDate ? (
@@ -147,7 +163,7 @@ export function TaskModal({
                   mode="single"
                   selected={taskData.dueDate}
                   onSelect={(date) =>
-                    setTaskData((prev) => ({ ...prev, dueDate: date }))
+                    setTaskData({ ...taskData, dueDate: date || undefined })
                   }
                   initialFocus
                 />
@@ -162,160 +178,81 @@ export function TaskModal({
                 type="number"
                 value={taskData.timeEstimate}
                 onChange={(e) =>
-                  setTaskData((prev) => ({
-                    ...prev,
-                    timeEstimate: parseFloat(e.target.value) || 0,
-                  }))
+                  setTaskData({
+                    ...taskData,
+                    timeEstimate: parseInt(e.target.value) || 0,
+                  })
                 }
-                min={0}
-                step={0.5}
+                min="0"
+                className="w-20"
               />
               <Clock className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid gap-2">
             <div className="flex items-center gap-2">
+              <Label htmlFor="recurring">Recurring</Label>
               <Switch
                 id="recurring"
                 checked={taskData.isRecurring}
                 onCheckedChange={(checked) =>
-                  setTaskData((prev) => ({ ...prev, isRecurring: checked }))
+                  setTaskData({ ...taskData, isRecurring: checked })
                 }
               />
-              <Label htmlFor="recurring">Recurring Task</Label>
             </div>
-
             {taskData.isRecurring && (
-              <div className="grid gap-4 pl-4 border-l-2 border-border">
-                <div className="grid gap-2">
-                  <Label>Frequency</Label>
-                  <Select
-                    value={taskData.recurringFrequency}
-                    onValueChange={(value: RecurringFrequency) =>
-                      setTaskData((prev) => ({
-                        ...prev,
-                        recurringFrequency: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="biweekly">Every Other Week</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Recurring Day</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {taskData.recurringDay ? (
-                          format(taskData.recurringDay, "PPP")
-                        ) : (
-                          <span>Pick a recurring day</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={taskData.recurringDay}
-                        onSelect={(date) =>
-                          setTaskData((prev) => ({
-                            ...prev,
-                            recurringDay: date,
-                          }))
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
+              <Select
+                value={taskData.recurringFrequency}
+                onValueChange={(value) =>
+                  setTaskData({
+                    ...taskData,
+                    recurringFrequency: value as RecurringFrequency,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select frequency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
             )}
           </div>
-
-          <div className="grid gap-2">
-            <Label>Subtasks</Label>
-            <div className="space-y-2">
-              {taskData.subtasks.map((subtask, index) => (
-                <div key={subtask.id} className="flex items-center gap-2">
-                  <Input
-                    value={subtask.title}
-                    onChange={(e) => {
-                      const newSubtasks = [...taskData.subtasks];
-                      newSubtasks[index] = {
-                        ...subtask,
-                        title: e.target.value,
-                      };
-                      setTaskData((prev) => ({
-                        ...prev,
-                        subtasks: newSubtasks,
-                      }));
-                    }}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      const newSubtasks = taskData.subtasks.filter(
-                        (_, i) => i !== index,
-                      );
-                      setTaskData((prev) => ({
-                        ...prev,
-                        subtasks: newSubtasks,
-                      }));
-                    }}
-                  >
-                    ×
-                  </Button>
-                </div>
-              ))}
+        </div>
+        <DialogFooter className="flex justify-between">
+          <div>
+            {task.id && (
               <Button
-                variant="outline"
-                className="w-full"
+                type="button"
+                variant="destructive"
                 onClick={() => {
-                  const newSubtask = {
-                    id: Math.random().toString(36).substr(2, 9),
-                    title: "",
-                    completed: false,
-                  };
-                  setTaskData((prev) => ({
-                    ...prev,
-                    subtasks: [...prev.subtasks, newSubtask],
-                  }));
+                  if (confirm("Are you sure you want to delete this task?")) {
+                    onDelete?.(task.id);
+                  }
                 }}
               >
-                Add Subtask
+                Delete Task
               </Button>
-            </div>
+            )}
           </div>
-        </div>
-
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)} variant="outline">
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              onSave(taskData);
-              onOpenChange(false);
-            }}
-          >
-            Save
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => onOpenChange(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                onSave(taskData);
+                onOpenChange(false);
+              }}
+            >
+              Save
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

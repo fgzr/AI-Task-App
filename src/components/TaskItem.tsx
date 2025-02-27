@@ -1,7 +1,7 @@
 import React from "react";
 import { Checkbox } from "./ui/checkbox";
 import { Badge } from "./ui/badge";
-import { GripVertical, Star, ChevronRight } from "lucide-react";
+import { GripVertical, Star, ChevronRight, Folder } from "lucide-react";
 import {
   formatDistanceToNow,
   isToday,
@@ -20,11 +20,13 @@ interface TaskItemProps {
   id?: string;
   title?: string;
   completed?: boolean;
-  priority?: "low" | "medium" | "high";
+  priority?: "low" | "medium" | "high" | undefined;
+  projectId?: string;
   dueDate?: Date;
   isStarred?: boolean;
   timeEstimate?: number;
   subtasks?: SubTask[];
+  projects?: Array<{ id: string; name: string; color: string }>;
   onToggleStar?: () => void;
   onToggleSubtask?: (subtaskId: string) => void;
   onUpdateSubtasks?: (subtasks: SubTask[]) => void;
@@ -38,7 +40,9 @@ export const TaskItem = ({
   id = "1",
   title = "Example Task",
   completed = false,
-  priority = "medium",
+  priority,
+  projectId,
+  projects = [],
   onToggleComplete = () => {},
   onDragStart = () => {},
   onDragEnd = () => {},
@@ -53,10 +57,14 @@ export const TaskItem = ({
 }: TaskItemProps) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const priorityColors = {
-    low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-    medium:
-      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-    high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+    low: "bg-green-500",
+    medium: "bg-yellow-500",
+    high: "bg-red-500",
+  };
+
+  const handleCheckboxChange = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleComplete(id);
   };
 
   return (
@@ -65,19 +73,23 @@ export const TaskItem = ({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cn(
-        "flex items-start gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer",
+        "relative flex items-start gap-3 p-4 bg-secondary/50 border rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer",
         completed && "opacity-60",
       )}
       onClick={(e) => {
-        if (
-          !(e.target instanceof HTMLInputElement) &&
-          !(e.target instanceof HTMLButtonElement)
-        ) {
+        const isControlElement =
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLButtonElement ||
+          (e.target instanceof HTMLElement && e.target.closest("button")) ||
+          (e.target instanceof HTMLElement &&
+            e.target.closest('[role="button"]'));
+
+        if (!isControlElement) {
           onClick();
         }
       }}
     >
-      <GripVertical className="h-5 w-5 text-gray-400 cursor-move" />
+      <GripVertical className="h-5 w-5 text-gray-400 cursor-move relative z-10" />
       <div
         onClick={(e) => {
           e.stopPropagation();
@@ -90,27 +102,27 @@ export const TaskItem = ({
         {subtasks.length > 0 && (
           <ChevronRight
             className={cn(
-              "h-4 w-4 text-gray-400 transition-transform",
+              "h-4 w-4 text-muted-foreground transition-transform",
               isExpanded && "transform rotate-90",
             )}
           />
         )}
       </div>
-      <Checkbox
-        checked={completed}
-        onCheckedChange={() => onToggleComplete?.(id)}
-        className="h-5 w-5"
-        onClick={(e) => e.stopPropagation()}
-      />
-      <div className="flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+      <div
+        onClick={handleCheckboxChange}
+        className="h-5 w-5 flex items-center justify-center"
+      >
+        <Checkbox checked={completed} className="h-5 w-5" />
+      </div>
+      <div className="flex-1 relative z-0">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-2">
             <p
               className={cn(
                 "text-sm font-medium",
                 completed
-                  ? "line-through text-gray-400 dark:text-gray-500"
-                  : "text-gray-900 dark:text-gray-100",
+                  ? "line-through text-muted-foreground/70"
+                  : "text-foreground",
               )}
             >
               {title}
@@ -121,39 +133,56 @@ export const TaskItem = ({
               </span>
             )}
             {subtasks.length > 0 && (
-              <Badge
-                variant="secondary"
-                className="text-xs bg-muted text-muted-foreground"
+              <div
+                className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full"
+                title={`${subtasks.length} ${subtasks.length === 1 ? "subtask" : "subtasks"}`}
               >
-                {subtasks.length}{" "}
-                {subtasks.length === 1 ? "subtask" : "subtasks"}
-              </Badge>
+                {subtasks.length}
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="secondary"
-              className={cn("text-xs", priorityColors[priority])}
-            >
-              {priority}
-            </Badge>
-            {dueDate && (
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="w-[100px]">
+              {projectId && (
+                <Badge
+                  variant="outline"
+                  className="text-xs flex items-center gap-1 w-full justify-center"
+                >
+                  <Folder className="h-3 w-3" />
+                  {projects.find((p) => p.id === projectId)?.name || "Unknown"}
+                </Badge>
+              )}
+            </div>
+            <div className="w-[20px] flex justify-center">
+              {priority && (
+                <div
+                  className={cn(
+                    "w-3 h-3 rounded-full",
+                    priorityColors[priority],
+                  )}
+                  title={`${priority.charAt(0).toUpperCase() + priority.slice(1)} Priority`}
+                />
+              )}
+            </div>
+            <div className="w-[80px] flex justify-end">
               <span className="text-xs text-muted-foreground">
-                {isToday(dueDate)
-                  ? "Today"
-                  : isTomorrow(dueDate)
-                    ? "Tomorrow"
-                    : isYesterday(dueDate)
-                      ? "Yesterday"
-                      : formatDistanceToNow(dueDate, { addSuffix: true })}
+                {dueDate
+                  ? isToday(dueDate)
+                    ? "Today"
+                    : isTomorrow(dueDate)
+                      ? "Tomorrow"
+                      : isYesterday(dueDate)
+                        ? "Yesterday"
+                        : formatDistanceToNow(dueDate, { addSuffix: true })
+                  : ""}
               </span>
-            )}
+            </div>
             <Star
               className={cn(
                 "h-4 w-4 cursor-pointer",
                 isStarred
-                  ? "text-yellow-400 fill-yellow-400"
-                  : "text-gray-400 hover:text-yellow-400",
+                  ? "text-yellow-500 fill-yellow-500"
+                  : "text-muted-foreground hover:text-yellow-500",
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -197,19 +226,25 @@ export const TaskItem = ({
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <GripVertical className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 cursor-move mr-1" />
-                <Checkbox
-                  checked={subtask.completed}
-                  onCheckedChange={() => onToggleSubtask(subtask.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-4 w-4 rounded-full data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                />
+                <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-move mr-1" />
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSubtask(subtask.id);
+                  }}
+                  className="flex items-center justify-center"
+                >
+                  <Checkbox
+                    checked={subtask.completed}
+                    className="h-4 w-4 rounded-full data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                  />
+                </div>
                 <span
                   className={cn(
                     "text-sm font-normal",
                     subtask.completed
-                      ? "line-through text-gray-400"
-                      : "text-gray-600 dark:text-gray-400",
+                      ? "line-through text-muted-foreground/70"
+                      : "text-muted-foreground",
                   )}
                 >
                   {subtask.title}
@@ -229,7 +264,7 @@ export const TaskItem = ({
               <input
                 type="text"
                 placeholder="Add subtask... (press Enter to add)"
-                className="text-sm font-normal text-gray-600 dark:text-gray-400 bg-transparent border-none outline-none w-full"
+                className="text-sm font-normal text-muted-foreground bg-transparent border-none outline-none w-full"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && e.currentTarget.value.trim()) {
                     const newSubtask = {
